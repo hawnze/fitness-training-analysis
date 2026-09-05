@@ -1,0 +1,732 @@
+
+#Read Data
+```{r}
+getwd()
+setwd("C:/Users/hansj/OneDrive/Documents/OneDrive/Desktop/Laptop Files/Projects/R Project")
+hans_exercise_2025 <- read.csv("hans_dano_exercise_data_2025_to_2026.csv")
+```
+#Load and Explore / Data Cleaning
+```{r}
+head(hans_exercise_2025)
+```
+```{r}
+str(hans_exercise_2025)
+```
+```{r}
+summary(hans_exercise_2025)
+```
+#Check all column names
+```{r}
+colnames(hans_exercise_2025)
+```
+```{r}
+library(dplyr)
+```
+
+
+#Rename columns
+```{r}
+#Weight..lbs. to Weight(lbs)
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  rename(Weight_lbs = 5) #Weight..lbs. doesnt work so instead enter the index number "5"
+```
+
+```{r}
+#Set.Number to set_number
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  rename(set_number = Set.Number)
+```
+
+```{r}
+#Notes. to Notes
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  rename(Notes = Notes.)
+```
+
+```{r}
+#Standardize all column names to lowercase
+colnames(hans_exercise_2025) <- tolower(colnames(hans_exercise_2025))
+```
+
+#Automatically added two extra columns when exporting so delete them
+```{r}
+hans_exercise_2025 <- hans_exercise_2025 %>% select(-c(x, x.1))
+```
+#Check if success
+```{r}
+colnames(hans_exercise_2025)
+```
+#Check the different row names for each column where it makes sense (Phase, muscle_group, Exercise)
+```{r}
+hans_exercise_2025 %>% 
+  distinct(phase)
+#or unique(hans_exercise_2025$Phase)
+```
+```{r}
+hans_exercise_2025 %>% 
+  distinct(muscle_group)
+
+#Output: 
+#Legs				
+#Legs				
+#Push				
+#Pull				
+#Push	
+
+#Obviously this is wrong since it created multiple distinct when there are just 3
+```
+
+```{r}
+#Find a fix to the above: try turning everything to lower case, did not work
+hans_exercise_2025 %>% 
+  mutate(muscle_group = tolower(muscle_group)) %>% 
+  distinct(muscle_group)
+```
+```{r}
+library(stringr)
+```
+
+```{r}
+hans_exercise_2025 %>% 
+  mutate(muscle_group = str_trim(muscle_group), # cuts invisible leading and trailing spaces.
+         muscle_group = str_squish(muscle_group),#removes repeated spaces inside the text
+         muscle_group = str_to_title(muscle_group)) %>% # forces everything to standard title case (so converting "legs", "LEGS", and "Legs" all into "Legs")
+  distinct(muscle_group)
+
+#Output: Legs, Push, Pull
+```
+
+```{r}
+#Save this change:
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  mutate(muscle_group = str_trim(muscle_group), 
+         muscle_group = str_squish(muscle_group),
+         muscle_group = str_to_title(muscle_group))
+```
+
+#Fix column value names
+```{r}
+hans_exercise_2025 %>%
+  distinct(exercise) %>% 
+  arrange(exercise) #sort alphabetically
+#Found "Leg Extensions" and "Leg Extentions"
+#Found "Revers Pec Dec Rear Delts" and Reverse "Pec Dec Rear Delts"
+#Found 2 copies of Seated Cable Rows (not including Precor)
+```
+
+```{r}
+#Fix 1: Found "Leg Extensions" and "Leg Extentions"
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  mutate(exercise = case_match(exercise, "Leg Extenstions" ~ "Leg Extensions", .default = exercise))
+```
+
+```{r}
+#Fix 2: Found "Revers Pec Dec Rear Delts" and Reverse "Pec Dec Rear Delts"
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  mutate(exercise = case_match(exercise, "Revers Pec Dec Rear Delts" ~ "Reverse Pec Dec Rear Delts", .default = exercise))
+```
+
+```{r}
+#Fix 3: Found 2 copies of Seated Cable Rows (not including Precor)
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  mutate(exercise = ifelse(str_detect(exercise, "Seated Cable Rows") & !str_detect(exercise, "Precor"), "Seated Cable Rows", exercise))
+#Condition: If value contains "Seated Cable Rows" and does NOT contain "Precor", then we want it to become just "Seated Cable Rows", otherwise if false, then leave it as that exercise
+```
+
+#I also noticed there's 1127 observations but only 1066 in csv file
+```{r}
+#Check the 1067th row:
+hans_exercise_2025 %>% 
+  slice(1067) #OR hans_exercise_2025[1068, ] where [rownum, colnum]
+```
+```{r}
+#First check the first 1066 rows and see if it contains BLANK in ALL the column values
+blank_data <- which(hans_exercise_2025$Date == "" & hans_exercise_2025$Phase == "" & hans_exercise_2025$muscle_group == "" & hans_exercise_2025$Exercise == "" & is.na(hans_exercise_2025$weight_lbs) & is.na(hans_exercise_2025$set_number) & is.na(hans_exercise_2025$Reps) & is.na(hans_exercise_2025$Bodyweight) & hans_exercise_2025$Notes == "")
+
+blank_data
+ 
+#Drop the last 1127 - 1066 = 61 rows
+
+```
+```{r}
+#So rows 1067 to 1127 are empty. We can then delete them
+nrow(hans_exercise_2025[-c(1067:1127), ])
+
+hans_exercise_2025 <- hans_exercise_2025[-c(1067:1127), ]
+
+```
+
+```{r}
+hans_exercise_2025 %>% 
+  distinct(date)
+
+hans_exercise_2025 %>% #Need to make 0.0 value be NA since this would skew our data
+  distinct(weight_lbs)
+
+hans_exercise_2025 %>% 
+  distinct(set_number)
+
+hans_exercise_2025 %>% #There shouldn't be NA reps so remove columns where it says that
+  distinct(reps)
+
+hans_exercise_2025 %>% 
+  distinct(bodyweight)
+
+hans_exercise_2025 %>% 
+  distinct(notes)
+```
+```{r}
+#Change all 0.0 values (wherever they are) in weight_lbs to be NA 
+which(is.na(hans_exercise_2025$reps) | hans_exercise_2025$reps < 1) #== 0.0 does not work for doubles
+#OR
+hans_exercise_2025 %>% 
+  filter(reps < 1 | is.na(reps))
+```
+
+```{r}
+# So the notes actually say I didn't track reps so this isn't useful at all. I'm just going to delete it
+hans_exercise_2025 <- hans_exercise_2025 %>%
+  filter(reps >= 1 | !is.na(reps))
+```
+
+
+#Convert date to an actual date format
+```{r}
+library(lubridate)
+```
+
+```{r}
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  mutate(date = ymd(date))
+```
+
+#FEATURE ENGINEERING
+```{r}
+#Add a new column called volume, which calculates weight * reps
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  mutate(volume = weight_lbs * reps)
+```
+
+#Epley Formula
+```{r}
+#Did some research and we can actually implement what's called the "Epley Formula" which calculates a persons 1RM strength using a submaximal weight and their number of completed repetitions:
+
+#1RM = w * (1 + r/30) 
+#w is weight lifted
+#r is number of successful reps
+
+#Note: this will only be useful for lifts that are between 2 to 10 repetitions since any higher than that data will be over or underestimated since endurance is different from raw strength
+
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  mutate(one_rep_max = weight_lbs * (1 + reps/30))
+```
+
+#Make 2 different trimmed data frames that are strictly bulk phase and cutting phase
+```{r}
+bulk_hans_exercise_2025 <- hans_exercise_2025 %>%
+  filter(phase == "Bulk")
+```
+
+```{r}
+cut_hans_exercise_2025 <- hans_exercise_2025 %>%
+  filter(phase == "Cut")
+```
+
+#We can now group by the data for cut and bulk into weeks. This way, analyzing can be easier
+```{r}
+#Step 1: We can use function floor_date which adds a column that rounds the time unit DOWN to the nearest unit we spcify, in this case: day (where MONDAY (denoted as 1) will be considered start of the week 
+bulk_hans_exercise_2025 <- bulk_hans_exercise_2025 %>% 
+  mutate(start_of_week = floor_date(date, unit = "week", week_start = 1))
+
+#Check what this looks like
+bulk_hans_exercise_2025
+```
+#Now we can group by into the unique buckets: start of week, muscle group, exercise 
+#On top of this, we will aggregate using summarise() to give us weekly sets per exercise, weekly max_weight per exercise, weekly max 1RM, weekly total volume (average_body_weight will only work for cut_weekly data)
+```{r}
+#weekly_sets will count how many rows (sets) per week we had
+#max_weight will looks at all the sets in the bucket, and will look at the highest weight
+#max_1_rm will take the highest one rep max considering each bucket
+#total_volume will scan the volume in all the rows per bucket then sum it
+#average_body_weight will take all the body weights per bucket then average it out
+bulk_weekly <- bulk_hans_exercise_2025 %>% 
+  group_by(start_of_week, muscle_group, exercise) %>% 
+  summarise(weekly_sets = n(),
+          max_weight = max(weight_lbs, na.rm = TRUE), #have to remove NAs or it compiles blank
+          max_1_rm = max(one_rep_max, na.rm = TRUE),
+          total_volume = sum(volume, na.rm = TRUE),
+          average_bodyweight = mean(bodyweight, na.rm = TRUE),
+          .groups = "drop"
+  )
+
+bulk_weekly 
+```
+
+
+#Do the same for cut
+```{r}
+cut_hans_exercise_2025 <- cut_hans_exercise_2025 %>% 
+  mutate(start_of_week = floor_date(date, unit = "week", week_start = 1))
+
+#Check what this looks like
+cut_hans_exercise_2025
+```
+
+```{r}
+cut_weekly <- cut_hans_exercise_2025 %>% 
+  group_by(start_of_week, muscle_group, exercise) %>% 
+  summarise(weekly_sets = n(),
+          max_weight = max(weight_lbs, na.rm = TRUE), #have to remove NAs or it compiles blank
+          max_1_rm = max(one_rep_max, na.rm = TRUE),
+          total_volume = sum(volume, na.rm = TRUE),
+          average_bodyweight = mean(bodyweight, na.rm = TRUE),
+          .groups = "drop"
+          )
+
+cut_weekly
+```
+
+#Question 1: Does my weekly training volume predict my weekly weight loss during my cut, after controlling for exercise type?
+
+```{r}
+#To answer this, we don't need 1 row per exercise. Exercise is irrelevant here and so we need to group by start of week only. We will also add another column called weight_change which uses the difference formula: (average bodyweight from week after - average bodyweight from week before). This means a -ve change means we lost weight. We will use the lag() function to shift the elements in vector one index forward. This way we can subtract from the new vector from the old one
+
+cut_weekly_total <- cut_hans_exercise_2025 %>% 
+  group_by(start_of_week) %>% 
+  summarise(total_weekly_volume = sum(volume, na.rm = TRUE), #total volume for each week
+            avg_bodyweight = mean(bodyweight, na.rm = TRUE),#average bodyweight for each week
+            .groups = "drop"
+            ) %>% 
+  mutate(weight_change = avg_bodyweight - lag(avg_bodyweight))#add a new column for weight change
+
+cut_weekly_total
+```
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+#Now we will visualize the relationship between the our independent variable: weekly volume vs. dependent variable: avg_bodyweight
+
+ggplot(data = cut_weekly_total, aes(x = total_weekly_volume, y = weight_change)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) + #method = "lm" tells ggplot2 to make a best of fit LINEAR line instead of  a line that curves everywhere
+  labs(
+    title = "Weekly Volume vs Weight Change (Cut)",
+    x = "Total Weekly Volume (lbs)",
+    y = "Weight Change (lbs) — Negative = Loss"
+  ) 
+```
+#Although the plots seem random, we will do a hypothesis test considering our slope, p-value, and coefficient of determination (r^2)
+```{r}
+#Observe the intercept and slope
+cut_model <- lm(weight_change ~ total_weekly_volume, data = cut_weekly_total)
+cut_model
+
+#Slope: For every 1 lb of volume, weight_change changes by -1.541e-05.
+```
+
+```{r}
+summary(cut_model)
+```
+
+#P-value interpretation: If the null hypothesis is true: weekly volume does NOT predict weight change, there is a 39.2% probability we would see a test statistic (the slope) as extreme as the one we observed which is -1.541e-05 or -0.00001541
+
+#Conclusion: So we can say that because p-value = 0.3923 > 0.05, there is no significant statistical evidence and we fail to reject the null hypothesis: "weekly volume does not predict weight change". The weak negative trend in the data was likely due to random chance.
+
+#R^2 is how much the percentage of Y variance is explained by X. We can see adjusted R^2 = -0.01857 is negative (R^2 more useful than just R^2 = 0.07403 since it handles multiple predictors) meaning the model is poor. So with this data, it is interpreted as -1.86% of Y's variance is explained by X which doesn't make a lot of sense and effectively means none of the variance in weight loss is explained by weekly_volume. This must mean that 12 weeks is just too small of a samples size
+
+#After searching, this is the formula for R^2 and how it was used in my dataset: 
+#Adjusted R² = 1 - [ (1 - R²) × (n - 1) / (n - k - 1) ] where k is number of predictors
+#            = 1 - [ (1 - 0.074) × (12 - 1) / (12 - 1 - 1) ]
+#            = 1 - [ 0.926 × 11 / 10 ]
+#            = 1 - [ 0.926 × 1.1 ]
+#            = 1 - 1.0186
+#            = -0.0186
+
+
+#Question 2: During my bulk, I wondered if my incline dumbbell press strength increased when I had more rest (Disclaimer: I know that some days I just forgot to record which can be mistaken as a rest day and could skew the data. To account for this, I want to define a rest day as <= 7 day gap from doing the push muscle group. This is because I did chest without a gap greater than 7 for my split, Otherwise, if the gap is >7 days, we can consider this a logging gap in data)
+
+```{r}
+#First, we will make a new subset that filters for any push exercise (This is because they are all useful exercises that could potentially affect my incline dumbell press strength).
+
+push_bulk <- bulk_hans_exercise_2025 %>% 
+  filter(muscle_group == "Push")
+
+push_bulk
+
+push_bulk %>% 
+  distinct(exercise)
+```
+```{r}
+#Now we will calculate the rest days between each push session and clean all the gaps >7days
+
+push_bulk <- push_bulk %>% 
+  arrange(date) %>%  #Not necessary to order date since already ordered but safer
+  mutate(rest_days_raw = as.numeric(date - lag(date))) %>% #Make a new column of simple current date - the date from the day before
+  mutate(rest_days = as.numeric(ifelse(rest_days_raw > 7, "NA", rest_days_raw))) #Make another column with condition: if greater than 7 days, then label as NA (dont need), otherwise label as what we already have. Essentially this just gets rid of the gaps > 7 days by labelling them as NA
+# I also used as.numeric() function around rest_days because it was giving it as chr
+
+push_bulk
+
+dim(push_bulk)
+```
+
+```{r}
+#Now we filter what we're actually interested in: Incline Dumbell Press.
+#THIS CODE IS BASICALLY FILTERING INCLINE DUMBELL PRESS BUT TAKING INTO ACCOUNT THE REST GAP FROM THE LAST PUSH DAY
+
+#We will filter for the specific exercise and take out the rest days that are labelled NA (rest days > 7)
+incline_dumbell_bulk <- push_bulk %>% 
+  filter(exercise == "Incline Dumbell Press" & !is.na(rest_days))
+
+incline_dumbell_bulk
+
+#came up as an empty data frame.... let's fix this
+
+
+```
+```{r}
+push_bulk <- push_bulk %>%
+  mutate(exercise = str_trim(exercise),          # Removes leading/trailing spaces
+         exercise = str_squish(exercise))        # Removes repeated internal spaces
+```
+
+```{r}
+#Try again
+
+incline_dumbell_bulk <- push_bulk %>% 
+  filter(exercise == "Incline Dumbell Press" & !is.na(rest_days))
+
+incline_dumbell_bulk
+
+dim(incline_dumbell_bulk)
+
+#Fixed!
+#For some reason it still shows NA so I just changed the filter from filter(exercise == "Incline Dumbell Press" & !is.na(rest_days)) 
+
+incline_dumbell_bulk <- push_bulk %>% 
+  filter(exercise == "Incline Dumbell Press" & !rest_days_raw > 7)
+
+incline_dumbell_bulk
+dim(incline_dumbell_bulk)
+#We lost 2 rows of data from removing NA
+```
+#I want to compare my strength in Incline Dumbell Press by 1RM. If we choose to do volume, this can skew data due to the fact that the number of sets I chose to do could affect volume.
+```{r}
+incline_dumbell_bulk_model <- lm(one_rep_max ~ rest_days, data = incline_dumbell_bulk)
+incline_dumbell_bulk_model
+
+summary(incline_dumbell_bulk_model)
+
+#Slope: 1.69 -> Each additional rest day = +1.69 lbs on your Incline Press 1RM.
+#p-value: 0.074 -> If rest truly had no effect (H0 was true), there is a 7.4% chance of seeing a slope this large
+
+
+#The effect is SMALL! We can see that there is an average of 1.69 lbs per one rest day. However, there is only 17 data points so could be due to random variation
+```
+#A linear regression was used to test whether rest days predicted Incline Dumbbell Press strength during the bulk. The model showed a positive trend (slope = 1.69 lbs per rest day), but the result was not statistically significant (p = 0.074, Adjusted R² = 0.144). This suggests that while rest may have had a small positive effect, the sample size was too small to draw a definitive conclusion. Future work with more data is needed to confirm this relationship.
+```{r}
+#Make a regression line
+ggplot(data = incline_dumbell_bulk, aes(x = rest_days, y = one_rep_max)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    title = "# of Rest Days vs 1RM",
+    x = "# of Rest Days",
+    y = "One Rep Max (lbs)"
+  )
+```
+
+#Question 3: In terms of Bulking phase, let's analyze volume by muscle group and answer these questions: 
+#a. Which muscle group did I train the most? (Most volume, sets)
+#b. How did my volume distribution change over time? (Weekly trends)
+#c. Which exercises drove the most volume for each muscle group
+
+#3.a. Which muscle group did I train the most? (Most volume, sets)
+
+```{r}
+#We will make a new subset grouped by muscle group and create aggregates: total volume, total_sets(sets for each muscle group) and arrange it in a descending order
+volume_by_muscle_bulk <- bulk_hans_exercise_2025 %>% 
+  group_by(muscle_group) %>% 
+  summarise(
+    total_volume = sum(volume, na.rm = TRUE),
+    total_sets = n(),
+    .groups = "drop"
+  ) %>% 
+  arrange(desc(total_volume))
+
+volume_by_muscle_bulk
+```
+#Visualize volume by muscle group subset
+```{r}
+#We will use reorder() function on muscle_group column and order them by total volume 
+#geom_bar is not used here because that actually counts how many rows per muscle groups
+#geom_col is used instead as it is used for aggregates (in this case, it's the total_volume we made)
+ggplot(volume_by_muscle_bulk, aes(x = reorder(muscle_group, total_volume), y = total_volume)) +
+  geom_col(fill = "darkgreen") +
+  labs(
+    title = "Total Training Volume by Muscle Group (Bulk)",
+    x = "Muscle Group",
+    y = "Total Volume (lbs)"
+  ) 
+```
+#Conclusion 3. a.: The most volume was legs but this is due to how Leg exercises are naturally going to be heavier per exercise. It's very interesting how Push is my favorite exercise but I did the least volume but had the most sets.
+
+#3.b. How did my volume distribution change over time? (Weekly trends)
+```{r}
+#We are making a subset that groups the bulking data by rows that belong to the same week and the muscle group. Then we will aggregate by weekly volume  which sums up all the sets for that week per muscle group
+weekly_volume_muscle_bulk <- bulk_hans_exercise_2025 %>%
+  group_by(start_of_week, muscle_group) %>%
+  summarise(weekly_volume = sum(volume, na.rm = TRUE), .groups = "drop")
+
+weekly_volume_muscle_bulk
+```
+#Visualize the above subset
+```{r}
+#Make a legend which gives a distinct color per muscle group. Then we will add a scatterplot (geom_plot) that are connected by lines (geom_line, not geom_smooth since this is a line of best fit for each muscle group)
+ggplot(weekly_volume_muscle_bulk, aes(x = start_of_week, y = weekly_volume, color = muscle_group)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "Weekly Training Volume by Muscle Group (Bulk)",
+    x = "Week",
+    y = "Weekly Volume (lbs)",
+    color = "Muscle Group"
+  ) 
+```
+```{r}
+#How come the volume decreases over time? Let's check if this is due to lack of data or just less volume overall in the gym
+bulk_hans_exercise_2025 <- bulk_hans_exercise_2025 %>%
+  mutate(start_of_month = floor_date(date, unit = "month")) #Add a column that converts every day (row) to the first month and then this way we can get a count of how many we have in that month
+
+bulk_monthly <- bulk_hans_exercise_2025 %>%
+  group_by(start_of_month) %>%
+  summarise(
+    total_sets = n(),
+    total_volume = sum(volume, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+bulk_monthly
+  
+```
+
+
+#Conclusion 3.b.: While weekly volume fluctutated throughout my bulk, it can be observed that as I was about to enter my cut, the overall volume decereased for all muscle groups. This is prominent approximately during the month of April. This is also when I stopped doing Legs. I personally don't like hitting legs so this is consistent with my training regime. I also looked back at the raw data from my notes and found "WE BACKK(havent been tracking but still going to failure)". So this was likely due to a combination of scarce data logging and going into my cut. I stopped going to the gym seriously during this time due to exams and busy with school and work. It is interesting to see how I did 13 more sets in Februrary compared to March, yet I was able to do more volume
+
+#3. c. Which exercises drove the most volume for each muscle group
+
+```{r}
+bulk_exercise <- bulk_hans_exercise_2025 %>%
+  group_by(exercise) %>%
+  summarise(
+    total_sets = n(),
+    total_volume = sum(volume, na.rm = TRUE),
+    .groups = "drop") %>% 
+  arrange(desc(total_sets))
+
+bulk_exercise
+```
+
+```{r}
+#We have simply too many exercises to we will simplify this to our top 10 exercises
+top_exercises_bulk_volume <- bulk_exercise %>%
+  slice_max(total_volume, n = 10) %>% #slicing trims the data and gives us only n amount
+  pull(exercise) #Pull works similar to $ where it gives us the column values as a vector
+
+top_exercises_bulk_volume
+```
+
+```{r}
+library(tidyr)
+```
+#Let's make a subset so we can compare the exercises by volume
+```{r}
+#reorder(x-axis, sort by "this" data)
+bulk_by_volume_plot <- bulk_exercise %>%
+  filter(exercise %in% top_exercises_bulk_volume) %>%
+  ggplot(aes(x = reorder(exercise, total_volume), y = total_volume)) + #sort x-axis by exercise name and volume size. x-axis is our exercise and y-axis is total_volume
+  geom_col(fill = "steelblue") +
+  coord_flip() + #flips graph so we can see the names and they don't mush up
+  labs(title = "Total Volume (lbs)", x = "", y = "Volume")
+
+bulk_by_volume_plot
+```
+
+#Do the same thing but for sets: Let's make a subset so we can compare the exercises by sets
+```{r}
+top_exercises_bulk_sets <- bulk_exercise %>%
+  slice_max(total_sets, n = 10) %>%
+  pull(exercise) #Pull works similar to $ where it gives us the column values as a vector
+
+top_exercises_bulk_sets
+```
+
+```{r}
+
+bulk_by_sets_plot <- bulk_exercise %>%
+  filter(exercise %in% top_exercises_bulk_sets) %>%
+  ggplot(aes(x = reorder(exercise, total_sets), y = total_sets)) +
+  geom_col(fill = "red") +
+  coord_flip() +
+  labs(title = "Total Sets", x = "", y = "Sets")
+
+bulk_by_sets_plot
+```
+
+#Conclusion 3.c.: In terms of volume, it is to no surprise that Leg workouts naturally make up the top 5 by total volume. This is because Leg workouts can usually be done at a heavier weight while keeping the rep range similar to upper body exercises. However, It is interesting to see that Push workouts dominate in terms of total sets done. This is likely due to how earlier, we saw that I stopped doing legs towards the end of my bulk. It is still surprising however that leg extensions are still in the top 10 for total sets.
+
+
+#Question 4: Do the same analysis but for the cutting phase. Additionally I want to visualize my bodyweight
+
+#4.a. Total volume by Muscle Group (cut)
+```{r}
+volume_by_muscle_cut <- cut_hans_exercise_2025 %>%
+  group_by(muscle_group) %>%
+  summarise(
+    total_volume = sum(volume, na.rm = TRUE),
+    total_sets = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_volume))
+
+# View the table
+volume_by_muscle_cut
+```
+#Visualize above subset
+```{r}
+ggplot(volume_by_muscle_cut, aes(x = reorder(muscle_group, total_volume), y = total_volume)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Total Training Volume by Muscle Group (Cut)",
+    x = "Muscle Group",
+    y = "Total Volume (lbs)"
+  ) 
+```
+#Conclusion 4.a: When comparing total volume for legs in my cut compared to my bulk, it can be observed that it is the complete opposite of what happened during my bulk. I did a total of 554 sets during my cut so I exercised more often compared to 512 sets in total during my bulk. Similarly, I did push the most (Cut: Volume of 225470 (337 sets) vs. Bulk: Volume of 154687.5	(228 sets)).  However, when we look at legs, I only did 31 sets in total during my cut compared to the 84 I did in my bulk. Then for pull, it ranked in the middle with a similar set count but less volume during my cut (165103.8	in bulk and 129755 in cut). Overall, it can be seen that although I worked out more often, the concentration of these workouts in terms of muscle group were different.
+
+
+#4.b.
+```{r}
+weekly_volume_muscle_cut <- cut_hans_exercise_2025 %>%
+  group_by(start_of_week, muscle_group) %>%
+  summarise(
+    weekly_volume = sum(volume, na.rm = TRUE), 
+            .groups = "drop")
+
+weekly_volume_muscle_cut
+```
+
+```{r}
+#I added method = "lm" to see the line of best fit
+ggplot(weekly_volume_muscle_cut, aes(x = start_of_week, y = weekly_volume, color = muscle_group)) +
+  geom_line() +
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  labs(
+    title = "Weekly Training Volume by Muscle Group (Cut)",
+    x = "Week",
+    y = "Weekly Volume (lbs)",
+    color = "Muscle Group"
+  ) 
+```
+
+#Conclusion 4.b.: To no surprise during my cut, there were only 3 weeks of Leg exercises and a huge gap between July to October. When looking at the trend for Push and Pull, I noticed that as I approached the end of my cut, the volume stayed the same with non-negotiable slight decrease. This is honestly what I was hoping to see in my data because I was hoping to not lose any strength in my cut. To no surprise, I lost a minimal amount of strength and I felt great during my workouts without any feeling of lack of energy.
+
+
+#Now I want to visualize the cutting subset in terms of bodyweight
+```{r}
+#This plot will have gaps due to the fact that there is missing data that was not logged. 
+ggplot(cut_weekly_total, aes(x = start_of_week, y = avg_bodyweight)) +
+  geom_line(color = "darkgreen", size = 1.2) +
+  geom_point(color = "darkgreen", size = 3) +
+  labs(
+    title = "Weekly Average Bodyweight During Cut",
+    x = "Month",
+    y = "Bodyweight (lbs)"
+  ) 
+```
+
+#Looking at the data, there is a strong linear decreasing relationship between bodyweight and time.
+
+
+#Now let's analyze the full data (cut and bulk) and attempt to analyze any trends and patterns within the data.
+
+#Make total weekly volume for each phase but for full data
+```{r}
+#Again, add a new column to original data which rounds down to the start of the week
+hans_exercise_2025 <- hans_exercise_2025 %>% 
+  mutate(start_of_week = floor_date(date, unit = "week", week_start = 1))
+
+full_weekly_volume <- hans_exercise_2025 %>% 
+  group_by(start_of_week, phase) %>% 
+  summarise(total_volume = sum(volume, na.rm = TRUE), 
+            .groups = "drop")
+
+full_weekly_volume
+```
+
+#Visualize the above subset to observe trends in volume per week
+```{r}
+#Create a visualization
+#This is going to include a scatterplot that are connected by lines
+#It is also going to have a vline (vertical line)
+#We are going to annotate a text onto the visualization. I use la annotate() to mark the start of Cut's date and place the text near the top of plot (y=max()). We will rotate it 90 degrees. I adjusted the text using hjust and vjust because it was glitching out and not really sure why it wasn't displaying with just x and y 
+ggplot(full_weekly_volume, aes(x = start_of_week, y = total_volume)) + 
+  geom_point() + 
+  geom_line() + 
+  geom_vline(xintercept = as.Date("2025-06-09"), linetype = "dashed", color = "red", size = 1) +
+  annotate("text", x = as.Date("2025-06-09"), y = max(full_weekly_volume$total_volume, na.rm = TRUE),label = "Cut", color = "red", angle = 90, hjust = 2, vjust = -1) +
+  labs(title = "Hans' Overall Weekly Volume (2025)", subtitle = "Total Volume Across All Muscle Groups",
+    x = "Date",
+    y = "Total Weekly Volume (lbs)"
+  ) 
+```
+
+#Visualize this again but we will plot the Volume by Phase (similar graph)
+```{r}
+ggplot(full_weekly_volume, aes(x = start_of_week, y = total_volume, color = phase)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  labs(
+    title = "Weekly Training Volume: Bulk vs Cut",
+    x = "Date",
+    y = "Total Weekly Volume (lbs)",
+    color = "Phase"
+  )
+```
+
+#Observation: The first thing that was prominent in the data was how much more consistent I was during the cut. I notice a lot more data points within this Phase. Naturally, I notice that there is not that much variance in my volume. I am happy to see this as it partially signifies that I did not lose that much strength and did higher reps even though I did less weight over time. However, it is obvious that although that data is lacking in the Bulk Phase, the data point peaks were higher compared to my cut. This is clear that I did higher reps and weight lifted in my bulk.
+
+
+#Now we will analyze Volume by Muscle Group
+```{r}
+full_weekly_muscle <- hans_exercise_2025 %>% 
+  group_by(start_of_week, muscle_group) %>% 
+  summarise(total_volume = sum(volume, na.rm = TRUE), 
+            .groups = "drop")
+
+full_weekly_muscle
+```
+
+#Visualize subset
+```{r}
+ggplot(full_weekly_muscle, aes(x = start_of_week, y = total_volume, color = muscle_group)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+   geom_vline(xintercept = as.Date("2025-06-09"), linetype = "dashed", color = "black", size = 1) +
+  annotate("text", x = as.Date("2025-06-09"), y = max(full_weekly_muscle$total_volume, na.rm = TRUE), label = "Cut", color = "black", angle = 90, hjust = 1, vjust = 2) +
+  scale_x_date(
+    date_breaks = "1 month",  # Show every month
+    date_labels = "%b"         # Format: "Jan", "Feb"
+  ) +
+  labs(
+    title = "Weekly Training Volume by Muscle Group (Full timeline)",
+    x = "Date",
+    y = "Total Weekly Volume (lbs)",
+    color = "Muscle Group"
+  )
+```
+#Observation: When looking at the volume by muscle group data, again the legs consist of the least amount of data points. It also looks like the time ranging from Apr-Jul have the least amount of data points which is when I was transitioning into my cut. This signifies that as I was transitioning, I just did not log as much data as I could and that this was a busier time in my life due to exams in April.During my bulk, there seems to have been a honeymoon phase from Feb-Apr for all my muscle groups. This must be when I was really focused on the gym and making sure that I was doing the bulk properly, making sure that my strenth was proportional to me gaining weight (although I had not logged my weight during this phase). All my muscle groups have a recurring theme in which the volume naturally progressed as time went on during my cut.
