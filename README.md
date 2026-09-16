@@ -49,5 +49,8 @@ Using over 1,000 rows of tracked gym sessions, I explored the relationships betw
 
 ---
 
+*Limitations*
 
-Link to your GitHub: Since you have other projects, you can mention or link to your main GitHub profile: https://github.com/hawnze.
+This was a self-directed learning project using personal observational data. The dataset includes missing workout entries, a relatively small number of weeks for some analyses, and repeated sets within individual workout sessions. Because of these limitations, the regression results should be interpreted as exploratory rather than causal. If I revisited the analysis, I would aggregate repeated sets to the workout-session level for the rest-day analysis and use one bodyweight observation per day before calculating weekly averages.
+
+https://github.com/hawnze.
